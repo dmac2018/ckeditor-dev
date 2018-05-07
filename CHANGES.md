@@ -16,6 +16,8 @@ Fixed Issues:
 * [#1776](https://github.com/ckeditor/ckeditor-dev/issues/1776): [Image Base](https://ckeditor.com/cke4/addon/imagebase) empty caption placeholder is not hidden when blurred.
 * [#1592](https://github.com/ckeditor/ckeditor-dev/issues/1592): [Image Base](https://ckeditor.com/cke4/addon/imagebase) caption is not visible after paste.
 * [#620](https://github.com/ckeditor/ckeditor-dev/issues/620): Fixed: [`forcePasteAsPlainText`](https://docs.ckeditor.com/ckeditor4/latest/api/CKEDITOR_config.html#cfg-forcePasteAsPlainText) will be respected when internal and cross-editor pasting happens.
+* [#1925](https://github.com/ckeditor/ckeditor-dev/issues/1925): Fixed: `range.getClientRects` doesn't work correctly on IE9-IE10 with collapsed selection at the end of line.
+* [#1930](https://github.com/ckeditor/ckeditor-dev/issues/1930): Fixed: `range.getClientRects` returns invalid results when used on collapsed range based on elements as containers.
 
 API Changes:
 
@@ -23,6 +25,7 @@ API Changes:
 * [#1712](https://github.com/ckeditor/ckeditor-dev/issues/1712): [`extraPlugins`](https://docs.ckeditor.com/ckeditor4/latest/api/CKEDITOR_config.html#cfg-extraPlugins), [`removePlugins`](https://docs.ckeditor.com/ckeditor4/latest/api/CKEDITOR_config.html#cfg-removePlugins) and [`plugins`](https://docs.ckeditor.com/ckeditor4/latest/api/CKEDITOR_config.html#cfg-plugins) configuration options allow whitespace.
 * [#1724](https://github.com/ckeditor/ckeditor-dev/issues/1724): Added option to [`getClientRect`](https://docs.ckeditor.com/ckeditor4/latest/api/CKEDITOR_dom_element.html#method-getClientRect) function allowing to retrieve an absolute bounding rectangle of the element i.e. position relative to the upper-left corner of the topmost viewport.
 * [#1498](https://github.com/ckeditor/ckeditor-dev/issues/1498) : Added new method 'getClientRects()' to CKEDITOR.dom.range, which returns list of rects for each selected element.
+* [#1917](https://github.com/ckeditor/ckeditor-dev/issues/1917) : Added param to 'getClientRects()' so it can return absolute positioned rectangles.
 
 ## CKEditor 4.9.2
 
