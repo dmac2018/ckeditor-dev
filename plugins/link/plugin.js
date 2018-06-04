@@ -363,7 +363,7 @@
 
 				// The scope of search for anchors is the entire document for inline editors
 				// and editor's editable for classic editor/divarea (https://dev.ckeditor.com/ticket/11359).
-				scope = ( editable.isInline() && !editor.plugins.divarea ) ? editor.document : editable,
+				scope = editor.document,
 
 				links = scope.getElementsByTag( 'a' ),
 				imgs = scope.getElementsByTag( 'img' ),
@@ -373,7 +373,7 @@
 
 			// Retrieve all anchors within the scope.
 			while ( ( item = links.getItem( i++ ) ) ) {
-				if ( item.data( 'cke-saved-name' ) || item.hasAttribute( 'name' ) ) {
+				if ( (item.data( 'cke-saved-name' ) || item.hasAttribute( 'name' )) && !item.hasAttribute('href') ) {
 					anchors.push( {
 						name: item.data( 'cke-saved-name' ) || item.getAttribute( 'name' ),
 						id: item.getAttribute( 'id' )

@@ -19,7 +19,66 @@
 			return range;
 		}
 
-		function insertLinksIntoSelection( editor, data ) {
+		function toggleReportname(trackClicks, data) {
+			var reportingNameInput = $("label").filter(function() {
+				return $(this).text() == "Reporting Name"
+				}).parent().find("input")
+		
+			var linkURL =  $("label").filter(function() {
+				return $(this).text() == "Link URL"
+				}).parent().find("input").val();
+
+			var linkText =  $("label").filter(function() {
+				return $(this).text() == "Link Text"
+				}).parent().find("input").val();
+			
+			if(!trackClicks) {
+				$(reportingNameInput).prop('disabled', true);
+				$(reportingNameInput).val('LinkIsNotTracked');
+				$(reportingNameInput).css('opacity', '0.6');
+			}
+			else {
+				if(linkURL) {
+					$(reportingNameInput).prop('disabled', false);
+					$(reportingNameInput).css('opacity', '1');
+					$(reportingNameInput).val(generateReportingName(linkText, linkURL));
+				}
+			}
+		}
+
+		function  generateReportingName(linkText, linkUrl) {
+			if (linkUrl.indexOf("#") == 0) {
+				return noTrackedLinks;
+			}
+			var usedField = linkText.trim();
+			if (usedField == "") {
+				usedField = linkUrl.trim();
+			}
+			usedField = usedField.replace("http://", "");
+			usedField = usedField.replace("www.", "");
+			//var nonChars = new XRegExp('[^\\p{L}\\s\\d]*', 'g');
+			//input.replace(/\W/g, '')
+			usedField = usedField.replace(/\W/g, '');
+			return usedField.trim().substring(0, 45);
+		}
+		function updatePreviewLink(data) {
+		if(data) {
+			if(data.data.value != "") {
+				var protocol =  $("label").filter(function() {
+					return $(this).text() == "Protocol"
+				}).parent().find("select").val();
+
+				$("#previewLink").attr("href", protocol + data.data.value).css("cursor", "pointer");
+			}
+			else {
+				$("#previewLink").removeAttr("href").css("cursor", "none");;
+			}
+		}
+
+		}
+
+
+		window.insertLinksIntoSelection = function insertLinksIntoSelection( editor, data ) {
 			var attributes = plugin.getLinkAttributes( editor, data ),
 				ranges = editor.getSelection().getRanges(),
 				style = new CKEDITOR.style( {
@@ -32,6 +91,23 @@
 				nestedLinks,
 				i,
 				j;
+
+			//set our custom attributes:
+
+			//tooltip
+			attributes.set.title = data.lnkToolTip;
+			var trackClicksVal =  data.trackClicks;
+
+			//name
+			if(data.reportingName)
+				attributes.set.name = data.reportingName;
+			else
+				attributes.set.name = data.linkText;
+
+			//over-ride name if tracking is not enabled
+			if(!data.trackClicks)
+				attributes.set.name = "LinkIsNotTracked";
+				
 
 			style.type = CKEDITOR.STYLE_INLINE; // need to override... dunno why.
 
@@ -71,11 +147,90 @@
 
 				rangesToSelect.push( range );
 			}
+		}
+		window.insertReadMoreLinksIntoSelection = function insertReadMoreLinksIntoSelection( editor, data, readMoreId ) {
+			var attributes = plugin.getLinkAttributes( editor, data ),
+				ranges = editor.getSelection().getRanges(),
+				style = new CKEDITOR.style( {
+					element: 'a',
+					attributes: attributes.set
+				} ),
+				rangesToSelect = [],
+				range,
+				text,
+				nestedLinks,
+				i,
+				j;
+
+			//set our custom attributes:
+
+			//tooltip
+			attributes.set.title = data.lnkToolTip;
+
+			var divElement = document.createElement('div');
+			// var pElement = document.createElement('p');
+			var linkElement = document.createElement('a');
+
+			divElement.id = readMoreId;
+
+			linkElement.setAttribute('href', data.url.protocol + data.url.url);
+			linkElement.setAttribute('name', data.reportingName);
+			linkElement.setAttribute('title', data.lnkToolTip);
+			linkElement.setAttribute('target', "_blank");
+			linkElement.innerHTML = data.linkText;
+
+			 divElement.appendChild(linkElement);
+			// pElement.appendChild(divElement);
+			
+
+			attributes.set.name = generateReportingName(data.linkText, data.url.url);
+
+
+			style.type = CKEDITOR.STYLE_INLINE; // need to override... dunno why.
+
+			for ( i = 0; i < ranges.length; i++ ) {
+				range = ranges[ i ];
+
+				// Use link URL as text with a collapsed cursor.
+				if ( range.collapsed ) {
+					// Short mailto link text view (https://dev.ckeditor.com/ticket/5736).
+					text = new CKEDITOR.dom.text( data.linkText || ( data.type == 'email' ?
+						data.email.address : attributes.set[ 'data-cke-saved-href' ] ), editor.document );
+					range.insertNode( text );
+					range.selectNodeContents( text );
+				} else if ( initialLinkText !== data.linkText ) {
+					text = new CKEDITOR.dom.element( linkElement );
+
+					// Shrink range to preserve block element.
+					range.shrink( CKEDITOR.SHRINK_TEXT );
+
+					// Use extractHtmlFromRange to remove markup within the selection. Also this method is a little
+					// smarter than range#deleteContents as it plays better e.g. with table cells.
+					editor.editable().extractHtmlFromRange( range );
+					range.insertNode( text );
+				}
+
+				// Editable links nested within current range should be removed, so that the link is applied to whole selection.
+				nestedLinks = range._find( 'a' );
+
+				for	( j = 0; j < nestedLinks.length; j++ ) {
+					nestedLinks[ j ].remove( true );
+				}
+
+
+				// Apply style.
+				style.applyToRange( range, editor );
+
+				rangesToSelect.push( range );
+			}
+
 
 			editor.getSelection().selectRanges( rangesToSelect );
 		}
 
+
 		function editLinksInSelection( editor, selectedElements, data ) {
+			console.log(selectedElements);
 			var attributes = plugin.getLinkAttributes( editor, data ),
 				ranges = [],
 				element,
@@ -88,7 +243,21 @@
 				// We're only editing an existing link, so just overwrite the attributes.
 				element = selectedElements[ i ];
 				href = element.data( 'cke-saved-href' );
-				textView = element.getHtml();
+                textView = element.getHtml();
+
+				//set our custom attributes:
+				attributes.set.title = data.lnkToolTip;
+
+					//name
+				if (data.reportingName)
+					attributes.set.name = data.reportingName;
+				else
+					attributes.set.name = data.linkText;
+
+				//over-ride name if tracking is not enabled
+				if (!data.button)
+					attributes.set.name = "LinkIsNotTracked";
+
 
 				element.setAttributes( attributes.set );
 				element.removeAttributes( attributes.removed );
@@ -113,6 +282,45 @@
 			// We changed the content, so need to select it again.
 			editor.getSelection().selectRanges( ranges );
 		}
+
+		window.editReadMoreLinkInSelection = function editReadMoreLinkInSelection( editor, selectedElements, linkText ) {
+			//var attributes = plugin.getLinkAttributes( editor, data ),
+			var	ranges = [],
+				element,
+				href,
+				textView,
+				newText,
+				i;
+
+			for ( i = 0; i < selectedElements.length; i++ ) {
+				// We're only editing an existing link, so just overwrite the attributes.
+				element = selectedElements[ i ];
+				href = element.data( 'cke-saved-href' );
+                textView = element.getHtml();
+
+				
+				if ( linkText && initialLinkText != linkText ) {
+					// Display text has been changed.
+					newText = linkText;
+				}
+
+				//this is a delete
+				if ( !newText ) 
+					element.remove(false);					
+				else 
+					element.setText( newText );
+
+				if(newText)
+					ranges.push( createRangeForLink( editor, element ) );
+			}
+
+			// We changed the content, so need to select it again.
+			editor.getSelection().selectRanges( ranges );
+		}
+
+
+		
+
 
 		// Handles the event when the "Target" selection box is changed.
 		var targetChanged = function() {
@@ -159,7 +367,16 @@
 						dialog.showPage( 'target' );
 					if ( !uploadInitiallyHidden )
 						dialog.showPage( 'upload' );
-				} else {
+				}
+				else if(typeValue === 'Quicklink') 
+					showQuickLinkDialog();
+				else if(typeValue === 'ReadMore') {
+					//get the url value
+					var linkURL =  dialog.getContentElement('info', 'url').getValue();
+					var linktext = dialog.getContentElement('info', 'linkDisplayText').getValue();
+					showReadMoreDialog(linkURL, linktext);
+				}
+				else {
 					dialog.hidePage( 'target' );
 					if ( !uploadInitiallyHidden )
 						dialog.hidePage( 'upload' );
@@ -214,16 +431,136 @@
 
 		return {
 			title: linkLang.title,
-			minWidth: ( CKEDITOR.skinName || editor.config.skin ) == 'moono-lisa' ? 450 : 350,
-			minHeight: 240,
+			minWidth: ( CKEDITOR.skinName || editor.config.skin ) == 'moono-lisa' ? 600 : 350,
+            minHeight: 340,
 			contents: [ {
 				id: 'info',
-				label: linkLang.info,
+				label: 'Link',
 				title: linkLang.info,
-				elements: [ {
+				elements: [ 
+                    {
+                        type: 'vbox',
+                        id: 'urlOptions',
+                        children: [ {
+                            type: 'hbox',
+                            widths: [ '15%', '65%', '20%' ],
+                            children: [ 
+							{
+                                id: 'protocol',
+                                type: 'select',
+                                label: commonLang.protocol,
+                                'default': 'http://',
+                                items: [
+                                    // Force 'ltr' for protocol names in BIDI. (https://dev.ckeditor.com/ticket/5433)
+                                    [ 'http://\u200E', 'http://' ],
+                                    [ 'https://\u200E', 'https://' ],
+                                    [ 'mailto://\u200E', 'mailto://' ]
+                                ],
+                                setup: function( data ) {
+                                    if ( data.url )
+                                        this.setValue( data.url.protocol || '' );
+                                },
+                                commit: function( data ) {
+                                    if ( !data.url )
+                                        data.url = {};
+    
+                                    data.url.protocol = this.getValue();
+                                }
+                            },
+                            {
+                                type: 'text',
+                                id: 'url',
+                                label: 'Link URL',
+								required: true,
+                                onLoad: function() {
+									this.allowOnChange = true;
+									$("#" + this.domId).find("input").attr("placeholder", "www.example.com");
+									//console.log(this.domId);
+                              
+                                },
+                                onKeyUp: function() {
+                                    this.allowOnChange = false;
+                                    var protocolCmb = this.getDialog().getContentElement( 'info', 'protocol' ),
+                                        url = this.getValue(),
+                                        urlOnChangeProtocol = /^(http|https|ftp|news):\/\/(?=.)/i,
+                                        urlOnChangeTestOther = /^((javascript:)|[#\/\.\?])/i;
+    
+                                    var protocol = urlOnChangeProtocol.exec( url );
+                                    if ( protocol ) {
+                                        this.setValue( url.substr( protocol[ 0 ].length ) );
+                                        protocolCmb.setValue( protocol[ 0 ].toLowerCase() );
+                                    } else if ( urlOnChangeTestOther.test( url ) ) {
+                                        protocolCmb.setValue( '' );
+                                    }
+    
+                                    this.allowOnChange = true;
+                                },
+                                onChange: function(data) {
+                                    if ( this.allowOnChange ) // Dont't call on dialog load.
+									this.onKeyUp();
+									updatePreviewLink(data);
+                                },
+                                validate: function() {
+                                    var dialog = this.getDialog();
+    
+                                    if ( dialog.getContentElement( 'info', 'linkType' ) && dialog.getValueOf( 'info', 'linkType' ) != 'url' )
+                                        return true;
+    
+                                    if ( !editor.config.linkJavaScriptLinksAllowed && ( /javascript\:/ ).test( this.getValue() ) ) {
+                                        alert( commonLang.invalidValue ); // jshint ignore:line
+                                        return false;
+                                    }
+    
+                                    if ( this.getDialog().fakeObj ) // Edit Anchor.
+                                    return true;
+    
+                                    var func = CKEDITOR.dialog.validate.notEmpty( linkLang.noUrl );
+                                    return func.apply( this );
+                                },
+                                setup: function( data ) {
+									
+                                    this.allowOnChange = false;
+                                    if ( data.url )
+                                        this.setValue( data.url.url );
+                                    this.allowOnChange = true;
+    
+                                },
+                                commit: function( data ) {
+                                    // IE will not trigger the onChange event if the mouse has been used
+                                    // to carry all the operations https://dev.ckeditor.com/ticket/4724
+                                    this.onChange();
+    
+                                    if ( !data.url )
+                                        data.url = {};
+    
+                                    data.url.url = this.getValue();
+                                    this.allowOnChange = false;
+                                }
+							}, 
+							{
+								type: 'html',
+								id: 'preview',
+								style: 'margin-top: 25px;display: inline-block;text-decoration:underline; font-size:13px;',
+								html: '<a id="previewLink" target="_blank">Preview</a>'
+							}
+						],
+                            setup: function() {
+                                if ( !this.getDialog().getContentElement( 'info', 'linkType' ) )
+                                    this.getElement().show();
+                            }
+                        },
+                        {
+                            type: 'button',
+                            id: 'browse',
+                            hidden: 'true',
+                            filebrowser: 'info:url',
+                            label: commonLang.browseServer
+                        } ]
+                    },
+                {
 					type: 'text',
 					id: 'linkDisplayText',
-					label: linkLang.displayText,
+					label: 'Link Text',
 					setup: function() {
 						this.enable();
 
@@ -236,16 +573,76 @@
 					commit: function( data ) {
 						data.linkText = this.isEnabled() ? this.getValue() : '';
 					}
+                },
+                {
+					type: 'text',
+					id: 'linkToolTip',
+					label: 'Tooltip Text',
+					setup: function(data) {
+
+						this.enable();
+					   
+						if(data.advanced)
+							this.setValue( data.advanced.advTitle );
+						
+						// Keep inner text so that it can be compared in commit function. By obtaining value from getData()
+						// we get value stripped from new line chars which is important when comparing the value later on.
+						//initialLinkText = this.getValue();
+					},
+					commit: function( data ) {
+                       
+						data.lnkToolTip = this.isEnabled() ? this.getValue() : '';
+					}
 				},
 				{
+					id: "cbTrackClicks",
+					type: "checkbox",
+					label: "Track Clicks",
+					commit: function(data) {
+						data.button = this.getValue()
+					},
+					setup: function(data) {
+						if(data.advanced || data.trackClicks) {
+							if(data.advanced.advName == "LinkIsNotTracked")
+								this.setValue(false);
+							else
+								this.setValue(true);
+						}
+						// else
+						// 	this.setValue(true);
+					},
+					onChange: function(data) {
+							toggleReportname(this.getValue(), data);
+					}
+					
+				},
+				{
+					type: 'text',
+					id: 'reportingName',
+					label: 'Reporting Name',
+					setup: function(data) {
+
+						this.enable();
+					   
+						if(data.advanced)
+							this.setValue( data.advanced.advName );
+					},
+					commit: function( data ) {
+                       
+						data.reportingName = this.isEnabled() ? this.getValue() : '';
+					}
+				},
+			    {
 					id: 'linkType',
-					type: 'select',
+                    type: 'select',
+                    //style: 'display:none;',
 					label: linkLang.type,
 					'default': 'url',
 					items: [
 						[ linkLang.toUrl, 'url' ],
 						[ linkLang.toAnchor, 'anchor' ],
-						[ linkLang.toEmail, 'email' ]
+						[ 'Quicklink', 'Quicklink'],
+						[ 'Read More', 'ReadMore']
 					],
 					onChange: linkTypeChanged,
 					setup: function( data ) {
@@ -255,114 +652,7 @@
 						data.type = this.getValue();
 					}
 				},
-				{
-					type: 'vbox',
-					id: 'urlOptions',
-					children: [ {
-						type: 'hbox',
-						widths: [ '25%', '75%' ],
-						children: [ {
-							id: 'protocol',
-							type: 'select',
-							label: commonLang.protocol,
-							'default': 'http://',
-							items: [
-								// Force 'ltr' for protocol names in BIDI. (https://dev.ckeditor.com/ticket/5433)
-								[ 'http://\u200E', 'http://' ],
-								[ 'https://\u200E', 'https://' ],
-								[ 'ftp://\u200E', 'ftp://' ],
-								[ 'news://\u200E', 'news://' ],
-								[ linkLang.other, '' ]
-							],
-							setup: function( data ) {
-								if ( data.url )
-									this.setValue( data.url.protocol || '' );
-							},
-							commit: function( data ) {
-								if ( !data.url )
-									data.url = {};
 
-								data.url.protocol = this.getValue();
-							}
-						},
-						{
-							type: 'text',
-							id: 'url',
-							label: commonLang.url,
-							required: true,
-							onLoad: function() {
-								this.allowOnChange = true;
-							},
-							onKeyUp: function() {
-								this.allowOnChange = false;
-								var protocolCmb = this.getDialog().getContentElement( 'info', 'protocol' ),
-									url = this.getValue(),
-									urlOnChangeProtocol = /^(http|https|ftp|news):\/\/(?=.)/i,
-									urlOnChangeTestOther = /^((javascript:)|[#\/\.\?])/i;
-
-								var protocol = urlOnChangeProtocol.exec( url );
-								if ( protocol ) {
-									this.setValue( url.substr( protocol[ 0 ].length ) );
-									protocolCmb.setValue( protocol[ 0 ].toLowerCase() );
-								} else if ( urlOnChangeTestOther.test( url ) ) {
-									protocolCmb.setValue( '' );
-								}
-
-								this.allowOnChange = true;
-							},
-							onChange: function() {
-								if ( this.allowOnChange ) // Dont't call on dialog load.
-								this.onKeyUp();
-							},
-							validate: function() {
-								var dialog = this.getDialog();
-
-								if ( dialog.getContentElement( 'info', 'linkType' ) && dialog.getValueOf( 'info', 'linkType' ) != 'url' )
-									return true;
-
-								if ( !editor.config.linkJavaScriptLinksAllowed && ( /javascript\:/ ).test( this.getValue() ) ) {
-									alert( commonLang.invalidValue ); // jshint ignore:line
-									return false;
-								}
-
-								if ( this.getDialog().fakeObj ) // Edit Anchor.
-								return true;
-
-								var func = CKEDITOR.dialog.validate.notEmpty( linkLang.noUrl );
-								return func.apply( this );
-							},
-							setup: function( data ) {
-								this.allowOnChange = false;
-								if ( data.url )
-									this.setValue( data.url.url );
-								this.allowOnChange = true;
-
-							},
-							commit: function( data ) {
-								// IE will not trigger the onChange event if the mouse has been used
-								// to carry all the operations https://dev.ckeditor.com/ticket/4724
-								this.onChange();
-
-								if ( !data.url )
-									data.url = {};
-
-								data.url.url = this.getValue();
-								this.allowOnChange = false;
-							}
-						} ],
-						setup: function() {
-							if ( !this.getDialog().getContentElement( 'info', 'linkType' ) )
-								this.getElement().show();
-						}
-					},
-					{
-						type: 'button',
-						id: 'browse',
-						hidden: 'true',
-						filebrowser: 'info:url',
-						label: commonLang.browseServer
-					} ]
-				},
 				{
 					type: 'vbox',
 					id: 'anchorOptions',
@@ -489,7 +779,7 @@
 								this.setValue( data.email.address );
 
 							var linkType = this.getDialog().getContentElement( 'info', 'linkType' );
-							if ( linkType && linkType.getValue() == 'email' )
+							if ( !linkType && linkType.getValue() == 'email' )
 								this.select();
 						},
 						commit: function( data ) {
@@ -541,7 +831,7 @@
 				id: 'target',
 				requiredContent: 'a[target]', // This is not fully correct, because some target option requires JS.
 				label: linkLang.target,
-				title: linkLang.target,
+                title: linkLang.target,
 				elements: [ {
 					type: 'hbox',
 					widths: [ '50%', '50%' ],
@@ -553,12 +843,8 @@
 						style: 'width : 100%;',
 						'items': [
 							[ commonLang.notSet, 'notSet' ],
-							[ linkLang.targetFrame, 'frame' ],
-							[ linkLang.targetPopup, 'popup' ],
 							[ commonLang.targetNew, '_blank' ],
-							[ commonLang.targetTop, '_top' ],
 							[ commonLang.targetSelf, '_self' ],
-							[ commonLang.targetParent, '_parent' ]
 						],
 						onChange: targetChanged,
 						setup: function( data ) {
@@ -947,15 +1233,17 @@
 
 				// Record down the selected element in the dialog.
 				this._.selectedElements = elements;
-
+                
 				this.setupContent( data );
 			},
 			onOk: function() {
 				var data = {};
 
+				
 				// Collect data from fields.
 				this.commitContent( data );
 
+				
 				if ( !this._.selectedElements.length ) {
 					insertLinksIntoSelection( editor, data );
 				} else {
@@ -967,14 +1255,22 @@
 			onLoad: function() {
 				if ( !editor.config.linkShowAdvancedTab )
 					this.hidePage( 'advanced' ); //Hide Advanded tab.
-
 				if ( !editor.config.linkShowTargetTab )
-					this.hidePage( 'target' ); //Hide Target tab.
+				    this.hidePage( 'target' ); //Hide Target tab.
 			},
 			// Inital focus on 'url' field if link is of type URL.
 			onFocus: function() {
 				var linkType = this.getContentElement( 'info', 'linkType' ),
 					urlField;
+
+			//get the url value
+			var linkURL =  this.getContentElement('info', 'url').getValue();
+
+				//If this is a readMore link, set the URL field to "Read More"				
+				if(linkURL.toLowerCase().indexOf("readmorecontent.aspx") > -1) 
+					linkType.setValue("ReadMore");
+				else
+					linkType.setValue("url");
 
 				if ( linkType && linkType.getValue() == 'url' ) {
 					urlField = this.getContentElement( 'info', 'url' );
